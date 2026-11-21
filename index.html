@@ -228,6 +228,7 @@ DATA.forEach((q, i) => {
   card.className = 'card' + (inD ? '' : ' hidden');
   card.dataset.type = q.type; card.dataset.sec = q.section; card.dataset.idx = i; card.dataset.layer = q.layer || 'ext';
   card.dataset.deck = inD ? '1' : '0';
+  card.dataset.ans = dispAnswer;
   const layerTag = (q.layer === 'core') ? '🎯' : '📚';
   const label = q.type === 'multi' ? ' <span style="font-size:12px;color:var(--sub);font-weight:400">（多选，选出后点「提交」）</span>' : '';
   let optsHtml = '';
@@ -290,12 +291,20 @@ DATA.forEach((q, i) => {
   }
 });
 
-// 恢复已答状态（锁定+展示对错，但不自动展开解析）
+// 恢复已答状态：锁定并直观展示对错与解析
 DATA.forEach((q, i) => {
   const st = progress[i]; if (!st) return;
   const card = list.children[i];
-  card.querySelectorAll('.opt').forEach(o => o.classList.add('disabled'));
+  const ans = card.dataset.ans || '';
+  card.querySelectorAll('.opt').forEach(o => {
+    o.classList.add('disabled');
+    if (ans && ans.includes(o.dataset.v)) o.classList.add('right');
+  });
   const btn = card.querySelector('.multi-submit'); if (btn) btn.disabled = true;
+  const verdict = card.querySelector('.verdict');
+  verdict.textContent = st === 'c' ? '✓ 已答对（重做可再答）' : '✗ 已答错（重做可再答）';
+  verdict.className = 'verdict ' + (st === 'c' ? 'ok' : 'bad');
+  card.querySelector('.explain').classList.add('show');
 });
 refreshScore();
 </script>
