@@ -153,12 +153,30 @@ const secs = [...new Set(DATA.map(q => q.section))];
 const secCount = {};
 DATA.forEach(q => secCount[q.section] = (secCount[q.section]||0)+1);
 const sf = document.getElementById('secfilter');
+const secChips = {};   // 章节名 -> 按钮元素（做绿色进度条）
+const allChip = sf.querySelector('.chip[data-s="all"]');
 secs.forEach(s => {
   const d = document.createElement('div');
   d.className = 'chip'; d.dataset.s = s;
-  d.innerHTML = s + ' <b>' + secCount[s] + '</b>';
+  d.innerHTML = s + ' <b>0/' + secCount[s] + '</b>';
+  secChips[s] = d;
   sf.appendChild(d);
 });
+// 按本轮完成度给按钮填充绿色进度
+function paintChips(secAgg, totalA, totalT) {
+  const paint = (el, a, t) => {
+    if (!el) return;
+    const pct = t ? Math.round(a / t * 100) : 0;
+    el.style.background = `linear-gradient(to right, rgba(52,168,83,.38) ${pct}%, rgba(52,168,83,.10) ${pct}%)`;
+    const b = el.querySelector('b');
+    if (b) b.textContent = `${a}/${t}`;
+  };
+  Object.entries(secChips).forEach(([s, el]) => {
+    const g = secAgg[s] || { t: secCount[s], a: 0 };
+    paint(el, g.a, g.t);
+  });
+  paint(allChip, totalA, totalT);
+}
 
 document.querySelectorAll('.tab').forEach(t => t.onclick = () => {
   document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
@@ -236,6 +254,7 @@ function refreshScore() {
     const txt = `本轮已答 ${g.a}/${g.t} · 正确率 ${g.a ? Math.round(g.c/g.a*100)+'%' : '—'}`;
     els.forEach(e => e.textContent = txt);
   });
+  paintChips(secAgg, a, visTotal);
 }
 document.getElementById('resetTop').onclick = () => {
   const nextType = TYPE_CYCLE[round % 3];
