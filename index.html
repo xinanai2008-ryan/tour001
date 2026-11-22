@@ -33,6 +33,9 @@ header p { color:var(--sub); font-size:13px; margin-top:6px; }
 .typediv { display:flex; align-items:center; gap:14px; margin:30px 0 6px; color:var(--bad); font-weight:700; font-size:16px; }
 .typediv::before, .typediv::after { content:''; flex:1; border-top:2.5px solid var(--bad); border-radius:2px; }
 .typediv.hidden { display:none !important; }
+.secstat { margin:18px 0 2px; background:#eef1f6; border-radius:12px; padding:10px 16px; font-size:13px; color:var(--sub); display:flex; justify-content:space-between; flex-wrap:wrap; gap:6px; }
+.secstat b, .secstat .sv b { color:var(--text); }
+.secstat.hidden { display:none !important; }
 .qhead { display:flex; gap:10px; align-items:baseline; margin-bottom:12px; flex-wrap:wrap; }
 .qnum { color:var(--accent); font-weight:700; font-size:15px; }
 .qsec { font-size:12px; color:var(--sub); background:var(--bg); border-radius:6px; padding:2px 8px; }
@@ -173,6 +176,7 @@ lf.onclick = e => {
   c.classList.add('on'); curLayer = c.dataset.l; applyFilter();
 };
 function applyFilter() {
+  const visibleSecs = new Set();
   document.querySelectorAll('.card').forEach(card => {
     if (card.dataset.deck !== '1') return;   // 非本轮牌组的题始终隐藏
     const st = progress[card.dataset.idx];
@@ -184,7 +188,10 @@ function applyFilter() {
     const okS = curSec === 'all' || card.dataset.sec === curSec;
     const okL = curLayer === 'all' || card.dataset.layer === curLayer;
     card.classList.toggle('hidden', !(okT && okS && okL));
+    if (!card.classList.contains('hidden')) visibleSecs.add(card.dataset.sec);
   });
+  // 章节统计条：本章无可见题时隐藏
+  document.querySelectorAll('.secstat').forEach(el => el.classList.toggle('hidden', !visibleSecs.has(el.dataset.sec)));
   // 分割线：只有其后仍有可见题目时才显示
   let lastDiv = null, lastVisible = false;
   const flush = () => { if (lastDiv) lastDiv.classList.toggle('hidden', !lastVisible); };
@@ -214,6 +221,21 @@ function refreshScore() {
   document.getElementById('tTotal').textContent = visTotal;
   document.getElementById('tPct').textContent = visTotal ? Math.round(a/visTotal*100)+'%' : '0%';
   document.getElementById('tRate').textContent = a ? Math.round(c/a*100)+'%' : '—';
+  // 每章本轮统计（开头/结尾两条同步更新）
+  const secAgg = {};
+  document.querySelectorAll('.card').forEach(card => {
+    if (card.dataset.deck !== '1') return;
+    const s = card.dataset.sec;
+    const g = secAgg[s] = secAgg[s] || { t: 0, a: 0, c: 0 };
+    g.t++;
+    const st = progress[card.dataset.idx];
+    if (st === 'c') { g.a++; g.c++; } else if (st === 'w') g.a++;
+  });
+  Object.entries(secEls).forEach(([sec, els]) => {
+    const g = secAgg[sec] || { t: 0, a: 0, c: 0 };
+    const txt = `本轮已答 ${g.a}/${g.t} · 正确率 ${g.a ? Math.round(g.c/g.a*100)+'%' : '—'}`;
+    els.forEach(e => e.textContent = txt);
+  });
 }
 document.getElementById('resetTop').onclick = () => {
   const nextType = TYPE_CYCLE[round % 3];
@@ -226,9 +248,22 @@ document.getElementById('resetTop').onclick = () => {
 const list = document.getElementById('list');
 const LETTERS = 'ABCDEFG';
 const cardEls = [];
-let prevType = null;
+const secEls = {};   // 章节名 -> [顶部统计条, 底部统计条] 的文本节点
+function mkStat(sec) {
+  const d = document.createElement('div');
+  d.className = 'secstat'; d.dataset.sec = sec;
+  d.innerHTML = `<span>📊 <b>${sec}</b></span><span class="sv">本轮已答 0/0 · 正确率 —</span>`;
+  (secEls[sec] = secEls[sec] || []).push(d.querySelector('.sv'));
+  return d;
+}
+let prevType = null, prevSec = null;
 DATA.forEach((q, i) => {
   const inD = inDeck.has(i);
+  if (q.section !== prevSec) {   // 章节过渡：上一章底部统计条 + 本章顶部统计条
+    if (prevSec !== null) list.appendChild(mkStat(prevSec));
+    list.appendChild(mkStat(q.section));
+    prevSec = q.section; prevType = null;
+  }
   if (q.type !== prevType) {   // 题型过渡区：红色分割线
     const dv = document.createElement('div');
     dv.className = 'typediv';
@@ -315,6 +350,8 @@ DATA.forEach((q, i) => {
     });
   }
 });
+
+if (prevSec !== null) list.appendChild(mkStat(prevSec));   // 最后一章的底部统计条
 
 // 恢复已答状态：锁定并直观展示对错与解析
 DATA.forEach((q, i) => {
